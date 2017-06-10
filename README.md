@@ -1,2 +1,2 @@
 # live-template-editor-seo
-SEO addon plugin for Live Template Editor
+SEO seo plugin for Live Template Editor
