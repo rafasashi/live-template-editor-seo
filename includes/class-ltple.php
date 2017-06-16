@@ -231,6 +231,40 @@ class LTPLE_SEO {
 		return $fields;
 	}	
 	
+	
+	public function set_article_columns($columns) {
+
+		// Remove description, posts, wpseo columns
+		$columns = [];
+		
+		// Add artist-website, posts columns
+		
+		$columns['cb'] 					= '<input type="checkbox" />';
+		$columns['title'] 				= 'Title';
+		//$columns['author'] 			= 'Author';
+		$columns['taxonomy-seo-tag'] 	= 'SEO Tags Url';
+		$columns['taxonomy-seo-pbn'] 	= 'PBN';
+		$columns['action'] 				= 'Action';
+		//$columns['date'] 				= 'Date';
+			
+		return $columns;
+	}
+	
+		
+	public function add_article_column_content($column, $post_id){
+	
+		if($column == 'action') {
+
+			$url = add_query_arg( array(
+			
+				'schedule-pbn' 	=> $post_id,
+				
+			), $this->parent->urls->current );
+		
+			echo '<a class="btn btn-xs btn-info" href="'.$url.'">Publish</a>';
+		}
+	}	
+	
 	public function set_anchor_columns($columns) {
 
 		// Remove description, posts, wpseo columns
@@ -321,10 +355,25 @@ class LTPLE_SEO {
 			
 			add_filter('manage_edit-seo-anchor_columns', array( $this, 'set_anchor_columns' ) );
 			add_filter('manage_seo-anchor_custom_column', array( $this, 'add_anchor_column_content' ),10,3);			
+
+			add_filter('manage_seo-article_posts_columns', array( $this, 'set_article_columns' ) );
+			add_filter('manage_posts_custom_column', array( $this, 'add_article_column_content' ),10,3);		
 		
 			add_filter("seo-article_custom_fields", array( $this, 'add_seo_article_fields' ));
 		
-			add_action('publish_seo-article', array( $this, 'schedule_pbn' ),1,2);
+			if( !empty($_GET['schedule-pbn']) ){
+				
+				$post_id = intval($_GET['schedule-pbn']);
+				
+				$post = get_post($post_id);
+				
+				if( !empty($post) ){
+					
+					$this->schedule_pbn($post_id,$post);
+				}
+			}
+		
+			//add_action('publish_seo-article', array( $this, 'schedule_pbn' ),1,2);
 		}
 		else{
 
@@ -337,6 +386,8 @@ class LTPLE_SEO {
 	
 	public function schedule_pbn($post_id, $post){
 		
+		$i = 0;
+		
 		if( $post->post_status == 'publish' ){
 		
 			$terms = wp_get_post_terms( $post_id, 'seo-pbn' );
@@ -344,9 +395,7 @@ class LTPLE_SEO {
 			if( !empty($terms) ){
 				
 				$published = get_post_meta($post_id,'seo-article-published',true);
-				
-				$i = 0;
-				
+
 				foreach( $terms as $term ){
 					
 					// get connected apps
@@ -384,31 +433,53 @@ class LTPLE_SEO {
 				}
 			}
 		}
+		
+		// output message
+		
+		$this->scheduledPbn = $i;
+		
+		add_action( 'admin_notices', function() {
+
+			echo'<div class="notice notice-success is-dismissible">';
+			
+				echo'<p>';	
+			
+					if( $this->scheduledPbn == 1 ){
+						
+						echo $this->scheduledPbn . ' article';
+					}
+					else{
+						
+						echo $this->scheduledPbn . ' articles';
+					}
+				
+					echo ' scheduled for publication';
+				
+				echo'</p>';
+				
+			echo'</div>';
+
+		});
 	}
 	
 	public function publish_seo_article( $post_id, $app_id ){
 
 		//check is published
+
+		$published = get_post_meta($post_id,'seo-article-published',true);	
 		
 		$is_published = false;
 		
-		$published = get_post_meta($post_id,'seo-article-published',true);
-		
-		if( !empty($published['key']) ){
+		if( !empty($published['key']) && in_array( strval($app_id), $published['key'] )){
 			
-			foreach( $published['key'] as $id ){
-				
-				if( intval($id) === $app_id ){
-					
-					$is_published = true;
-					break;
-				}
-			}
+			$is_published = true;
 		}
 		
 		if( !$is_published ){
+			
+			$article = $this->get_seo_article($post_id);
 
-			if( $article = $this->get_seo_article($post_id) ){
+			if( !empty($article) ){
 				
 				// include app
 				
@@ -453,8 +524,6 @@ class LTPLE_SEO {
 							
 							wp_set_post_terms( $backlink_id, array_keys($article['post_pbn']), 'seo-pbn' );
 						}
-						
-						
 					}
 				}
 			}
